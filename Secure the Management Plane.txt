@@ -1,0 +1,141 @@
+Practical No: 4
+Aim: Secure the Management Plane
+
+Topology:
+from r1-r2 s1/0
+from r2-r3 s1/1
+
+Step 1: Configuration of Router [R1]:
+interface Loopback 0
+ip address 192.168.1.1 255.255.255.0
+exit
+interface Serial1/0
+ip address 10.1.1.1 255.255.255.252
+no shutdown
+exit
+end
+
+Router R2
+interface Serial1/0
+ip address 10.1.1.2 255.255.255.252
+no shutdown
+exit
+interface Serial1/1
+ip address 10.2.2.1 255.255.255.252
+no shutdown
+exit
+end
+
+Router R3
+interface Loopback0
+ip address 192.168.3.1 255.255.255.0
+exit
+interface Serial1/1
+ip address 10.2.2.2 255.255.255.252
+no shutdown
+exit
+end
+
+Step 2: Configure static routes.
+R1(config)# ip route 0.0.0.0 0.0.0.0 10.1.1.2
+R3(config)# ip route 0.0.0.0 0.0.0.0 10.2.2.1
+R2(config)# ip route 192.168.1.0 255.255.255.0 10.1.1.1
+ip route 192.168.3.0 255.255.255.0 10.2.2.2
+
+R1# tclsh
+foreach address {
+192.168.1.1
+10.1.1.1
+10.1.1.2
+10.2.2.1
+10.2.2.2
+192.168.3.1
+} { ping $address }
+
+Step 3: Secure management access.
+R1(config)#security passwords min-length 10
+enable secret class12345
+line console 0
+password ciscoconpass
+exec-timeout 5 0
+login
+logging synchronous
+exit
+line vty 0 4
+password ciscovtypass
+exec-timeout 5 0
+login
+exit
+line aux 0
+no exec
+end
+show run 
+conf t
+service password-encryption
+end
+show run
+conf t
+banner motd $Unauthorized access strictly prohibited!$
+exit
+show run
+exit
+
+Step 4: Configure enhanced username password security
+
+R1(config)# username JR-ADMIN secret class12345
+username ADMIN secret class54321
+line console 0
+login local
+exit
+line vty 0 4
+login local
+end
+
+perform steps 3 and 4 on R3 same as perfomed on R1
+
+R1# telnet 10.2.2.2
+Username: ADMIN
+Password: class54321
+
+R3# telnet 10.1.1.1
+Username: ADMIN
+Password: class54321
+
+Step 5: Enabling AAA RADIUS Authentication with Local User for Backup.
+R1(config)# aaa new-model
+radius server RADIUS-1
+address ipv4 192.168.1.101
+key RADIUS-1-pa55w0rd
+exit
+radius server RADIUS-2
+address ipv4 192.168.1.102
+key RADIUS-2-pa55w0rd
+exit
+aaa group server radius RADIUS-GROUP
+server name RADIUS-1
+server name RADIUS-2
+exit
+aaa authentication login default group RADIUS-GROUP local
+aaa authentication login TELNET-LOGIN group RADIUS-GROUP local-case
+line vty 0 4
+login authentication TELNET-LOGIN
+exit
+
+(repeat the same on R3 )
+
+telnet 10.2.2.2
+
+
+Step 6: Enabling secure remote management using SSH.
+
+R1(config)# ip domain-name ccnasecurity.com
+crypto key zeroize rsa
+crypto key generate rsa general-keys modulus 1024
+
+Configure SSH version 2 on R1.(because ssh version 1 has vulnerabilities)
+R1(config)# ip ssh version 2
+line vty 0 4
+transport input ssh
+end
+show ip ssh
+ssh -l ADMIN 10.2.2.2

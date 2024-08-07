@@ -1,0 +1,208 @@
+Practical No: 3
+Aim: Configuring IBGP and EBGP Sessions, Local Preference, and MED.
+
+Topology Diagram:
+3 routers from r1-r2 s1/0 and r2-r3 s1/1 and r1-r3 s1/2
+
+Step 1: Configure interface addresses.
+Router R1
+ISP(config)# interface Loopback0
+ip address 192.168.100.1 255.255.255.0
+exit
+interface Serial1/0
+ip address 192.168.1.5 255.255.255.252
+no shutdown
+exit
+interface Serial1/2
+ip address 192.168.1.1 255.255.255.252
+no shutdown
+end
+
+Router R2 (hostname SanJose1)
+SanJose1(config)# interface Loopback0
+ip address 172.16.64.1 255.255.255.0
+exit
+interface Serial1/0
+ip address 192.168.1.6 255.255.255.252
+no shutdown
+exit
+interface Serial1/1
+ip address 172.16.1.1 255.255.255.0
+no shutdown
+end
+
+Router R3 (hostname SanJose2)
+SanJose2(config)# interface Loopback0
+ip address 172.16.32.1 255.255.255.0
+exit
+interface Serial1/1
+ip address 192.168.1.2 255.255.255.252
+no shutdown
+exit
+interface Serial1/2
+ip address 172.16.1.2 255.255.255.0
+no shutdown
+end
+
+Step 2: Configure EIGRP.
+R2(config)# router eigrp 1
+network 172.16.0.0
+
+R3(config)# router eigrp 1
+network 172.16.0.0
+
+Step 3: Configure IBGP and verify BGP neighbors.
+R2(config)# router bgp 64512
+neighbor 172.16.32.1 remote-as 64512
+neighbor 172.16.32.1 update-source lo0
+
+R3(config)# router bgp 64512
+neighbor 172.16.64.1 remote-as 64512
+neighbor 172.16.64.1 update-source lo0
+
+R3# show ip bgp neighbors
+
+Step 4: Configure EBGP and verify BGP neighbors.
+R1(config)# router bgp 200
+neighbor 192.168.1.6 remote-as 64512
+neighbor 192.168.1.2 remote-as 64512
+network 192.168.100.0
+
+R2(config)# ip route 172.16.0.0 255.255.0.0 null0
+router bgp 64512
+neighbor 192.168.1.5 remote-as 200
+network 172.16.0.0
+show ip bgp neighbors
+
+R3(config)# ip route 172.16.0.0 255.255.0.0 null0
+router bgp 64512
+neighbor 192.168.1.1 remote-as 200
+network 172.16.0.0
+
+Step 5: View BGP summary output.
+R3# show ip bgp summary
+
+Step 6: Verify which path the traffic takes.
+R1#clear ip bgp *
+ping 172.16.64.1
+ping 172.16.1.1
+ping 172.16.32.1
+ping 172.16.1.2
+show ip bgp
+ping 172.16.1.1 source 192.168.100.1
+ping 172.16.32.1 source 192.168.100.1
+ping 172.16.1.2 source 192.168.100.1
+ping 172.16.64.1 source 192.168.100.1
+
+Step 7: Configure the BGP next-hop-self feature.
+R1(config)# router bgp 200
+network 192.168.1.0 mask 255.255.255.252
+network 192.168.1.4 mask 255.255.255.252
+show ip bgp
+
+R3# show ip route
+
+R1(config)# router bgp 200
+no network 192.168.1.0 mask 255.255.255.252
+no network 192.168.1.4 mask 255.255.255.252
+exit
+interface serial1/1
+shutdown
+
+R3# show ip bgp
+show ip route
+
+R2(config)# router bgp 64512
+neighbor 172.16.32.1 next-hop-self
+
+R3(config)# router bgp 64512
+neighbor 172.16.64.1 next-hop-self
+
+R2# clear ip bgp * 
+R3# clear ip bgp * 
+show ip bgp
+show ip route
+
+R1(config)# interface serial1/1
+no shutdown
+R3# show ip route
+
+Step 8: Set BGP local preference
+
+R2(config)# route-map PRIMARY_T1_IN permit 10
+set local-preference 150
+exit
+router bgp 64512
+neighbor 192.168.1.5 route-map PRIMARY_T1_IN in
+
+R3(config)# route-map SECONDARY_T1_IN permit 10
+set local-preference 125
+exit
+router bgp 64512
+neighbor 192.168.1.1 route-map SECONDARY_T1_IN in
+
+R2# clear ip bgp * soft
+R3# clear ip bgp * soft
+R2# show ip bgp
+R3# show ip bgp
+
+Step 9: Set BGP MED.
+
+SanJose1(config)#route-map PRIMARY_T1_MED_OUT permit 10
+set metric 50
+exit
+router bgp 64512
+neighbor 192.168.1.5 route-map PRIMARY_T1_MED_OUT out
+clear ip bgp * soft
+
+SanJose2(config)#route-map SECONDARY_T1_MED_OUT permit 10
+set metric 75
+exit
+router bgp 64512
+neighbor 192.168.1.1 route-map SECONDARY_T1_MED_OUT out
+clear ip bgp * soft
+ping 
+ 
+
+Step 10: Establish a default route.
+a. Configure ISP to inject a default route to both SanJose1 and SanJose2 using BGP using 
+the default-originate command
+
+ISP(config)#router bgp 200
+neighbor 192.168.1.6 default-originate
+neighbor 192.168.1.2 default-originate
+exit
+interface loopback 10
+ip address 10.0.0.1 255.255.255.0
+
+b. Verify that both routers have received the default route by examining the routing tables on 
+SanJose1 and SanJose2. Notice that both routers prefer the route between SanJose1 and ISP
+
+SanJose1>show ip route
+
+c. The preferred default route is by way of SanJose1 because of the higher local preference
+attribute configured on SanJose1 earlier
+
+SanJose2>show ip bgp
+
+d. Using the traceroute command verify that packets to 10.0.0.1 is using the default route 
+through SanJose1
+
+SanJose2>traceroute 10.0.0.1
+
+e. Next, test how BGP adapts to using a different default route when path between SanJose1 and 
+ISP goes down.
+
+ISP>conf t
+interface serial1/0
+shutdown
+
+f. Verify that both routers are modified their routing tables with the default route using the path 
+between SanJose2 and ISP
+
+SanJose1# show ip route
+
+g. Verify the new path using the traceroute command to 10.0.0.1 from SanJose1. Notice the 
+default route is now through SanJose2.
+
+SanJose1# trace 10.0.0.1

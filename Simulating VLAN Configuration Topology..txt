@@ -1,0 +1,55 @@
+Practical No: 7
+Aim: Simulating VLAN Configuration Topology
+
+(Perform using cisco packet tracer)
+
+Topology:
+2 switches in the middle connected with gig 0/1 to 0/2 intefaces 
+pc 0 to switch 1 with fa0 to fa0/1
+pc 2 to switch 1 with fa0 to fa0/3
+pc 1 to switch 2 with fa0 to fa0/2
+pc 3 to switch 2 with fa0 to fa0/3
+
+Step 1- Setting IP Address for all 4 PC 
+Pc0→ 10.1.100.1
+Pc1→ 10.1.100.2
+Pc2→ 10.1.110.1
+Pc3→ 10.1.110.2
+
+Step 2- Creating Virtual Lan Groups
+execute in both switches :
+en 
+conf t
+vlan 10 
+name upper 
+vlan 20 
+name lower 
+do sh vlan
+
+Configuring Access Mode-Configuring Switch1–
+int fa0/1
+switchport mode access 
+switchport access vlan 10 
+int fa0/3 
+switchport mode access 
+switchport access vlan 20 
+switchport mode trunk
+
+Configuring Access Mode-Configuring Switch2–
+int fa0/2
+switchport mode access 
+switchport access vlan 10 
+int fa0/3 
+switchport mode access 
+switchport access vlan 20 
+switchport mode trunk
+
+Step 3- Check Vlan Groups Working 
+Group Name Upper 
+Pinging From PC0 to PC1 
+Ping 10.1.100.2
+
+Similarly, 
+Group Name Lower 
+Pinging From PC2 to PC3 
+Ping 10.1.110.2

@@ -1,0 +1,144 @@
+Practical No - 5
+Aim : Configure and Verify Path Control Using PBR(POLICY BASED ROUTING)
+
+Topology :
+FROM R1 TO R2 - S1/0
+FROM R2-33 - S1/1
+FROM R1-R3 S1/1-S1/0
+FROM R3-R4 -S1/2-S1/0 
+
+Step 1: Configure loopbacks and assign addresses.
+
+Router R1
+interface Lo1
+ip address 192.168.1.1 255.255.255.0
+nterface Serial1/0
+ip address 172.16.12.1 255.255.255.248
+no shutdown
+interface Serial1/1
+ip address 172.16.13.1 255.255.255.248
+no shutdown
+End
+
+Router R2
+interface Lo2
+ip address 192.168.2.1 255.255.255.0
+interface Serial1/0
+ip address 172.16.12.2 255.255.255.248
+no shutdown
+interface Serial1/1
+ip address 172.16.23.2 255.255.255.248
+no shutdown
+End
+
+Router R3
+interface Lo3
+ip address 192.168.3.1 255.255.255.0
+interface Serial1/0
+ip address 172.16.13.3 255.255.255.248
+no shutdown
+interface Serial1/1
+ip address 172.16.23.3 255.255.255.248
+no shutdown
+interface Serial1/2
+ip address 172.16.34.3 255.255.255.248
+no shutdown
+End
+
+Router R4
+interface Lo4
+ip address 192.168.4.1 255.255.255.128
+interface Lo5
+ip address 192.168.4.129 255.255.255.128
+interface Serial1/0
+ip address 172.16.34.4 255.255.255.248
+no shutdown
+End
+
+STEP 2- Verify the configuration
+R3# show ip interface brief 
+R3# show protocols 
+R3# show interfaces description
+
+Step 3: Configure basic EIGRP.
+Router R1
+router eigrp 1
+network 192.168.1.0
+network 172.16.12.0 0.0.0.7
+network 172.16.13.0 0.0.0.7
+no auto-summary
+
+Router R2
+router eigrp 1
+network 192.168.2.0
+network 172.16.12.0 0.0.0.7
+network 172.16.23.0 0.0.0.7
+no auto-summary
+
+Router R3
+router eigrp 1
+network 192.168.3.0
+network 172.16.13.0 0.0.0.7
+network 172.16.23.0 0.0.0.7
+network 172.16.34.0 0.0.0.7
+no auto-summary
+
+Router R4
+router eigrp 1
+network 192.168.4.0
+network 172.16.34.0 0.0.0.7
+no auto-summary
+
+Step 4: Verify EIGRP connectivity
+show ip eigrp neighbors (run on all the routers)
+
+R1# tclsh
+foreach address {
+172.16.12.1
+172.16.12.2
+172.16.13.1
+172.16.13.3
+172.16.23.2
+172.16.23.3
+172.16.34.4
+172.16.34.3
+192.168.1.1
+192.168.2.1
+192.168.3.1
+192.168.4.1
+192.168.4.129
+} { ping $address }
+
+
+Step 5: Verify the current path.
+R1# show ip route
+R4# traceroute 192.168.1.1 source 192.168.4.1
+R4# traceroute 192.168.1.1 source 192.168.4.129
+R3# show interfaces serial1/0
+R3# show ip eigrp topology 192.168.1.0
+
+Step 6: Configure PBR to provide path control.
+R3(config)# ip access-list standard PBR-ACL
+remark ACL matches R4 LAN B traffic
+permit 192.168.4.128 0.0.0.127
+exit
+route-map R3-to-R1 permit
+description RM to forward LAN B traffic to R1
+match ip address PBR-ACL
+set ip next-hop 172.16.13.1
+exit
+interface s1/2
+ip policy route-map R3-to-R1
+end
+show route-map
+
+Step 7: Test the policy.
+R3(config)# access-list 1 permit 192.168.4.0 0.0.0.255
+exit
+debug ip policy ?
+debug ip policy 1
+
+R4# traceroute 192.168.1.1 source 192.168.4.1
+R4# traceroute 192.168.1.1 source 192.168.4.129
+
+R3# show route-map

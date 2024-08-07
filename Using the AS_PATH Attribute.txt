@@ -1,0 +1,82 @@
+Practical No: 2
+Aim: Using the AS_PATH Attribute 
+
+Topology Diagram:r1,r2,r3
+r1 to r2 - s1/0
+r2 to r3 - s1/1
+
+r1
+conf t
+interface Loopback0
+ip address 10.1.1.1 255.255.255.0
+exit
+interface Serial1/0
+ip address 192.168.1.5 255.255.255.252
+no shutdown
+end
+
+Router R2
+conf t 
+interface Loopback0
+ip address 10.2.2.1 255.255.255.0
+interface Serial1/0
+ip address 192.168.1.6 255.255.255.252
+no shutdown
+exit
+interface Serial1/1
+ip address 172.24.1.17 255.255.255.252
+no shutdown
+end
+
+Router R3
+conf t
+interface Loopback0
+ip address 10.3.3.1 255.255.255.0
+exit
+interface Serial1/1
+ip address 172.24.1.18 255.255.255.252
+no shutdown
+end
+
+Configure BGP.
+on r1
+Andheri(config)# router bgp 100
+neighbor 192.168.1.6 remote-as 300
+network 10.1.1.0 mask 255.255.255.0
+
+r2
+Bandra(config)# router bgp 300
+neighbor 192.168.1.5 remote-as 100
+neighbor 172.24.1.18 remote-as 65000
+network 10.2.2.0 mask 255.255.255.0
+
+r3
+Churchgate(config)# router bgp 65000
+neighbor 172.24.1.17 remote-as 300
+network 10.3.3.0 mask 255.255.255.0
+
+r2# show ip bgp neighbors
+
+Step 4 : Remove the private AS.
+r1#show ip route
+ping 10.3.3.1 source 10.1.1.1
+show ip bgp
+
+Use the AS_PATH attribute to filter routes.
+
+r2(config)# ip as-path access-list 1 deny ^100$
+ip as-path access-list 1 permit .*
+router bgp 300
+neighbor 192.168.1.5 remove-private-as
+r1# show ip route
+r2# show ip bgp regexp ^100$
+tclsh
+foreach address {
+192.168.1.5
+10.3.3.1
+10.1.1.1
+10.2.2.1
+192.168.1.6
+172.24.1.17
+172.24.1.18
+} { ping $address }

@@ -1,0 +1,155 @@
+Practical No: 6
+Aim: IP Service Level Agreements and Remote SPAN in a Campus Environment.
+
+******** Part 1: Prepare the switches
+Configure the trunks and EtherChannel from DLS1 to ALS1 and ALS2.
+
+DLS1(config)# vlan 666
+DLS1(config-vlan)# name NATIVE_DO_NOT_USE
+DLS1(config-vlan)# exit
+DLS1(config)# int ran f0/7-10
+DLS1(config-if-range)# switchport trunk encapsulation dot1q
+DLS1(config-if-range)# switchport trunk native vlan 666
+DLS1(config-if-range)# switchport nonegotiate
+DLS1(config-if-range)# switchport mode trunk
+DLS1(config-if-range)# exit
+DLS1(config)# int ran f0/7-8
+DLS1(config-if-range)# channel-group 1 mode active
+DLS1(config-if-range)# description EtherChannel to ALS1
+DLS1(config-if-range)# no shut
+DLS1(config-if-range)# exit
+DLS1(config)# int ran f0/9-10
+DLS1(config-if-range)# channel-group 2 mode active
+DLS1(config-if-range)# description EtherChannel to ALS2
+DLS1(config-if-range)# no shut
+DLS1(config-if-range)# exit
+
+Configure the trunks and EtherChannel between ALS1 and ALS2.
+
+ALS1(config)# interface range fastEthernet 0/11 - 12
+ALS1(config-if-range)# switchport mode trunk
+ALS1(config-if-range)# channel-group 3 mode active
+ALS1(config-if-range)# no shut
+
+Change the VTP mode of ALS1 and ALS2 to client.
+
+ALS1(config)# vtp mode client
+Setting device to VTP CLIENT mode.
+
+ALS2(config)# vtp mode client
+Setting device to VTP CLIENT mode.
+
+Create the VTP domain on DLS1, and create VLANs 100 and 200 for the domain.
+
+DLS1(config)# vtp domain SWPOD
+DLS1(config)# vtp version 2
+
+DLS1(config)# vlan 99
+DLS1(config-vlan)# name Management
+DLS1(config-vlan)# vlan 100
+DLS1(config-vlan)# name Finance
+DLS1(config-vlan)# vlan 200
+DLS1(config-vlan)# name Engineering
+DLS1(config-vlan)# exit
+
+Configure the host ports for the appropriate VLANs according to the diagram.
+
+ALS1(config)# interface fastEthernet 0/6
+ALS1(config-if)# switchport mode access
+ALS1(config-if)# switchport access vlan 100
+ALS1(config-if)# no shut
+
+ALS2(config)# interface fastEthernet 0/6
+ALS2(config-if)# switchport mode access
+ALS2(config-if)# switchport access vlan 200
+ALS1(config-if)# no shut
+
+Configure VLAN interfaces and enable routing.
+DLS1(config)# interface vlan 100
+DLS1(config-if)# ip address 172.16.100.1 255.255.255.0
+DLS1(config-if)# interface vlan 200
+DLS1(config-if)# ip address 172.16.200.1 255.255.255.0
+DLS1(config)# ip routing
+show ip route command on DLS1
+DLS1# show ip route | begin Gateway
+Gateway of last resort is not set
+
+      172.16.0.0/16 is variably subnetted, 6 subnets, 2 masks
+C        172.16.99.0/24 is directly connected, Vlan99
+L        172.16.99.1/32 is directly connected, Vlan99
+C        172.16.100.0/24 is directly connected, Vlan100
+L        172.16.100.1/32 is directly connected, Vlan100
+C        172.16.200.0/24 is directly connected, Vlan200
+L        172.16.200.1/32 is directly connected, Vlan200
+DLS1#
+Run the following Tcl script on DLS1 to verify full connectivity. If these pings are not successful, troubleshoot.
+
+DLS1# tclsh
+foreach address {
+172.16.99.1
+172.16.99.101
+172.16.99.102
+172.16.100.1
+172.16.200.1
+172.16.100.101
+172.16.200.101
+} {
+ping $address }
+
+
+******  Part 2: Configure Cisco IOS IP SLA
+ALS1(config)# ip sla responder
+ALS1(config)# ip sla responder udp-echo ipaddress 172.16.99.1 port 5000
+DLS1(config)# ip sla 1
+DLS1(config-ip-sla)#
+DLS1(config-ip-sla)# icmp-echo 172.16.100.101
+DLS1(config-ip-sla-echo)# exit
+
+DLS1(config)# ip sla 2
+DLS1(config-ip-sla)# icmp-echo 172.16.200.101
+DLS1(config-ip-sla-echo)# exit
+DLS1(config)# ip sla 3
+DLS1(config-ip-sla)# udp-jitter 172.16.99.101 5000
+DLS1(config-ip-sla-jitter)# exit
+DLS1(config)# ip sla 4
+DLS1(config-ip-sla)# udp-jitter 172.16.99.102 5000
+DLS1(config-ip-sla-jitter)# exit
+DLS1(config)# ip sla schedule 1 life forever start-time now
+DLS1(config)# ip sla schedule 2 life forever start-time now
+DLS1(config)# ip sla schedule 3 life forever start-time now
+DLS1(config)# ip sla schedule 4 life forever start-time now
+DLS1# show ip sla configuration 1
+DLS1# show ip sla configuration 3
+DLS1# show ip sla application
+ALS1# show ip sla responder
+DLS1# show ip sla statistics 1
+DLS1# show ip sla statistics 3
+ALS1(config)# interface vlan 99
+ALS1(config-if)# shutdown
+DLS1# show ip sla statistics 3
+
+*********   Part 3: Switch Port Analyzer (SPAN) Feature
+DLS1(config)# vlan 300
+DLS1(config-vlan)# name REMOTE_SPAN
+DLS1(config-vlan)# remote-span
+DLS1# show vlan brief | include active
+ALS1# show vlan brief | include active
+ALS1(config)# monitor session 1 source interface Fa0/6 
+ALS1(config)# monitor session 1 destination remote vlan 300
+ALS1# show monitor 
+ALS2(config)# monitor session 10 source remote vlan 300
+ALS2(config)# monitor session 10 destination interface Fa0/6
+ALS2# show monitor
+ALS2# show interface f0/6
+
+Test RSPAN operation
+ping from PC-A to the 172.16.99.102 address
+Open a web browser. Browse to the following url: http://172.16.99.1
+From ALS2, initiate a ping to PC-A, 172.16.100.101.
+From DLS1, initiate a ping to PC-A, 172.16.100.101.
+In the Wireshark application that is running on PC-B, select the STOP button then use the Statistics > Converstion List > IPv4 menu to view the IPv4 conversations contained in the capture. You will see that 172.16.200.101 (the address of PC-B) is not involved in any conversations except for traffic to 224.0.0.252 and 172.16.200.255.
+
+End of Lab
+DLS1# show run brief | exclude !
+ALS1# show run brief | exclude !
+ALS2# show run brief | exclude !
